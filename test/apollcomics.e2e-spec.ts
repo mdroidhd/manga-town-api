@@ -84,11 +84,7 @@ describe('Apoll Comics (e2e sin red externa)', () => {
     expect(unexpected).toEqual([]);
   });
 
-  it('registra el manifiesto junto a demo y Olympus', async () => {
-    const list = await request(app.getHttpServer()).get('/v1/providers').expect(200);
-    expect(list.body.data.map((item: { id: string }) => item.id)).toEqual(
-      expect.arrayContaining(['demo', 'olympus', 'apollcomics']),
-    );
+  it('expone el manifiesto de Apoll Comics', async () => {
     const response = await request(app.getHttpServer())
       .get('/v1/providers/apollcomics')
       .expect(200);
@@ -105,14 +101,24 @@ describe('Apoll Comics (e2e sin red externa)', () => {
     expect(fetchFn).not.toHaveBeenCalled();
   });
 
-  it('busca por WordPress y conserva los slugs válidos en el orden del HTML', async () => {
+  it('busca por WordPress y devuelve los slugs válidos con sus portadas en orden', async () => {
     const response = await request(app.getHttpServer())
       .get(`${catalog}/search`)
       .query({ q: 'invocador & acción' })
       .expect(200);
     expect(response.body.data).toEqual([
-      { id: slug, providerId: 'apollcomics', title: 'El invocador solitario de clase SSS' },
-      { id: 'leviatan', providerId: 'apollcomics', title: 'Leviatán' },
+      {
+        id: slug,
+        providerId: 'apollcomics',
+        title: 'El invocador solitario de clase SSS',
+        coverUrl: `${origin}/wp-content/uploads/invocador.jpg`,
+      },
+      {
+        id: 'leviatan',
+        providerId: 'apollcomics',
+        title: 'Leviatán',
+        coverUrl: `${origin}/wp-content/uploads/leviatan.jpg`,
+      },
     ]);
     expect(fetchFn).toHaveBeenCalledTimes(1);
   });
@@ -127,13 +133,23 @@ describe('Apoll Comics (e2e sin red externa)', () => {
     );
   });
 
-  it('devuelve páginas distintas de novedades con la señal de página siguiente', async () => {
+  it('devuelve páginas distintas de novedades con sus portadas y paginación', async () => {
     await request(app.getHttpServer())
       .get(`${catalog}/latest`)
       .expect(200, {
         data: [
-          { id: 'invocador', providerId: 'apollcomics', title: 'El invocador' },
-          { id: 'leviatan', providerId: 'apollcomics', title: 'Leviatán' },
+          {
+            id: 'invocador',
+            providerId: 'apollcomics',
+            title: 'El invocador',
+            coverUrl: `${origin}/wp-content/uploads/invocador.jpg`,
+          },
+          {
+            id: 'leviatan',
+            providerId: 'apollcomics',
+            title: 'Leviatán',
+            coverUrl: `${origin}/wp-content/uploads/leviatan.jpg`,
+          },
         ],
         page: 1,
         hasNextPage: true,
@@ -141,7 +157,14 @@ describe('Apoll Comics (e2e sin red externa)', () => {
     await request(app.getHttpServer())
       .get(`${catalog}/latest?page=2`)
       .expect(200, {
-        data: [{ id: 'el-archivo', providerId: 'apollcomics', title: 'El archivo' }],
+        data: [
+          {
+            id: 'el-archivo',
+            providerId: 'apollcomics',
+            title: 'El archivo',
+            coverUrl: `${origin}/wp-content/uploads/el-archivo.jpg`,
+          },
+        ],
         page: 2,
         hasNextPage: true,
       });

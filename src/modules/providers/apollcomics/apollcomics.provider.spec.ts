@@ -17,15 +17,25 @@ describe('ApollComicsProvider', () => {
     provider = new ApollComicsProvider(new ApollComicsClient(fetchFn));
   });
 
-  it('extrae títulos de novedades y detecta el enlace a la página siguiente', async () => {
+  it('extrae títulos y portadas de novedades y detecta el enlace a la página siguiente', async () => {
     fetchFn.mockResolvedValueOnce(new Response(fixture('latest-page-1.html')));
 
     await expect(provider.listLatest(1, ctx)).resolves.toEqual({
       status: 'ok',
       data: {
         items: [
-          { id: 'invocador', providerId: 'apollcomics', title: 'El invocador' },
-          { id: 'leviatan', providerId: 'apollcomics', title: 'Leviatán' },
+          {
+            id: 'invocador',
+            providerId: 'apollcomics',
+            title: 'El invocador',
+            coverUrl: 'https://apollcomics.es/wp-content/uploads/invocador.jpg',
+          },
+          {
+            id: 'leviatan',
+            providerId: 'apollcomics',
+            title: 'Leviatán',
+            coverUrl: 'https://apollcomics.es/wp-content/uploads/leviatan.jpg',
+          },
         ],
         hasNextPage: true,
       },
@@ -43,6 +53,29 @@ describe('ApollComicsProvider', () => {
       status: 'ok',
       data: {
         items: [{ id: 'los-viajeros', providerId: 'apollcomics', title: 'Los viajeros' }],
+        hasNextPage: false,
+      },
+    });
+  });
+
+  it.each([
+    'https://[',
+    'https://user@apollcomics.es/wp-content/uploads/serie.jpg',
+    'http://apollcomics.es/wp-content/uploads/serie.jpg',
+    'https://cdn1.apollcomics.com/serie.jpg',
+    '/wp-content/themes/madara/images/dflazy.jpg',
+  ])('conserva la serie de novedades cuando la portada %s no es válida', async (source) => {
+    fetchFn.mockResolvedValueOnce(
+      new Response(`<div class="page-item-detail">
+        <img data-src="${source}" alt="">
+        <h3 class="post-title"><a href="/manga/serie/">Serie</a></h3>
+      </div>`),
+    );
+
+    await expect(provider.listLatest(1, ctx)).resolves.toEqual({
+      status: 'ok',
+      data: {
+        items: [{ id: 'serie', providerId: 'apollcomics', title: 'Serie' }],
         hasNextPage: false,
       },
     });

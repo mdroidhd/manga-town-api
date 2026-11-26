@@ -7,7 +7,7 @@ API NestJS para un lector móvil tipo Mihon. Las extensiones se registran y ejec
 ## Estado actual
 
 - NestJS 11 y TypeScript sobre Node.js 20 o superior. Zod valida el entorno y el JSON de Olympus. Swagger está disponible en `/docs` cuando está habilitado. La API usa por defecto el prefijo `/v1` y expone rutas de salud, providers y catálogo, incluida la resolución de páginas. `CatalogController` pasa `userId: 'anonymous'` a los providers.
-- `ProvidersModule` registra `demo`, una fuente local sin red, y `olympus`, una fuente de cómics en español que opera en el servidor sin login ni captcha. Olympus usa el slug como ID de serie y el ID del capítulo como identificador de lectura. Descubre el origen canónico, cachea en memoria el origen y la lista pública de series, pagina capítulos y extrae URLs de páginas del lector HTML con Cheerio. Las pruebas de Olympus simulan el upstream.
+- `ProvidersModule` registra `olympus` y `apollcomics`, dos fuentes de cómics en español que operan en el servidor sin login ni captcha. Ambas usan el slug como ID de serie. Olympus descubre el origen canónico, cachea en memoria el origen y la lista pública de series y pagina capítulos. Apoll Comics extrae su catálogo del HTML de Madara. Las pruebas e2e simulan las respuestas de ambas fuentes.
 - El dominio en `src/domain/` contiene tipos y contratos independientes de NestJS. `src/modules/` reúne el catálogo y el registro de extensiones. `src/infrastructure/` reserva los adaptadores compartidos del diseño.
 
 ## Contrato de providers

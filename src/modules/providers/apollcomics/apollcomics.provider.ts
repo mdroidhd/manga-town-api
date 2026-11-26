@@ -87,18 +87,36 @@ function imageUrl(
   if (url && (url.origin === SITE_ORIGIN || url.origin === IMAGE_ORIGIN)) return url;
 }
 
+function coverImageUrl(
+  dataSrc: string | undefined,
+  src: string | undefined,
+  base: URL,
+): URL | undefined {
+  const url = imageUrl(dataSrc, src, base);
+  if (url && !/\/dflazy\.jpg$/i.test(url.pathname)) return url;
+}
+
 function cleanText(text: string): string {
   return text.replace(/\s+/gu, ' ').trim();
 }
 
-function seriesSummaries($: CheerioAPI, selector: string, url: URL): SeriesSummary[] {
+function seriesSummaries(
+  $: CheerioAPI,
+  url: URL,
+  linkSelector: string,
+  itemSelector: string,
+): SeriesSummary[] {
   const results = new Map<string, SeriesSummary>();
-  $(selector).each((_index, element) => {
+  $(linkSelector).each((_index, element) => {
     const anchor = $(element);
     const link = mangaLink(anchor.attr('href'), url);
     const title = cleanText(anchor.text());
     if (!link || link.chapter || !title || results.has(link.series)) return;
-    results.set(link.series, { id: link.series, providerId: manifest.id, title });
+    const summary: SeriesSummary = { id: link.series, providerId: manifest.id, title };
+    const cover = anchor.closest(itemSelector).find('img').first();
+    const coverUrl = coverImageUrl(cover.attr('data-src'), cover.attr('src'), url);
+    if (coverUrl?.origin === SITE_ORIGIN) summary.coverUrl = coverUrl.toString();
+    results.set(link.series, summary);
   });
   return [...results.values()];
 }
@@ -116,7 +134,7 @@ export class ApollComicsProvider implements Provider {
       const path = page === 1 ? '/manga/' : `/manga/page/${page}/`;
       const url = new URL(`${path}?m_orderby=latest`, SITE_ORIGIN);
       const $ = load(await this.client.getHtml(url, ctx.signal, true));
-      const items = seriesSummaries($, '.page-item-detail .post-title a', url);
+      const items = seriesSummaries($, url, '.page-item-detail .post-title a', '.page-item-detail');
       const nextPath = `/manga/page/${page + 1}`;
       const hasNextPage = $(`a[href*="${nextPath}"]`).is((_index, element) => {
         const next = safeUrl($(element).attr('href'), url);
@@ -135,7 +153,12 @@ export class ApollComicsProvider implements Provider {
       url.searchParams.set('s', query);
       url.searchParams.set('post_type', 'wp-manga');
       const $ = load(await this.client.getHtml(url, ctx.signal));
-      return seriesSummaries($, '.h4 a[href], .post-title a[href]', url);
+      return seriesSummaries(
+        $,
+        url,
+        '.h4 a[href], .post-title a[href]',
+        '.c-tabs-item__content, .page-item-detail',
+      );
     });
   }
 
@@ -148,9 +171,8 @@ export class ApollComicsProvider implements Provider {
 
       const detail: SeriesDetail = { id, providerId: manifest.id, title };
       const cover = $('.summary_image img').first();
-      const coverUrl = imageUrl(cover.attr('data-src'), cover.attr('src'), url);
-      if (coverUrl && !/\/dflazy\.jpg$/i.test(coverUrl.pathname))
-        detail.coverUrl = coverUrl.toString();
+      const coverUrl = coverImageUrl(cover.attr('data-src'), cover.attr('src'), url);
+      if (coverUrl) detail.coverUrl = coverUrl.toString();
 
       const description = cleanText($('.description-summary').first().text());
       if (description) detail.description = description;

@@ -4,15 +4,13 @@ API NestJS para un lector tipo Mihon donde **las extensiones viven en el servido
 
 ## Estado
 
-Base sólida, sin lógica de scraping todavía:
-
 - Configuración validada con Zod al arrancar (`src/config/env.ts`).
 - Prefijo de API versionado, CORS, validación global y errores uniformes.
 - Swagger en `/docs`.
 - Salud en `/v1/health` y contador de extensiones en `/v1/health/providers`.
 - Registro de providers con manifiesto y capacidades (`src/modules/providers`).
 - Endpoints de catálogo (`/v1/catalog/:provider/...`) que traducen `OperationResult` a HTTP.
-- Provider de ejemplo sin red, para probar el contrato de punta a punta.
+- Olympus Scanlation y Apoll Comics ofrecen búsquedas, novedades, fichas, capítulos y páginas de lectura.
 - Tests unitarios y e2e.
 
 ## Arranque

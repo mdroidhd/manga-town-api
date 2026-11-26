@@ -79,11 +79,7 @@ describe('Olympus (e2e sin red externa)', () => {
     expect(unexpected).toEqual([]);
   });
 
-  it('expone el manifiesto junto a demo', async () => {
-    const list = await request(app.getHttpServer()).get('/v1/providers').expect(200);
-    expect(list.body.data.map((item: { id: string }) => item.id)).toEqual(
-      expect.arrayContaining(['demo', 'olympus']),
-    );
+  it('expone el manifiesto de Olympus', async () => {
     const response = await request(app.getHttpServer()).get('/v1/providers/olympus').expect(200);
     expect(response.body.data).toMatchObject({
       id: 'olympus',
@@ -127,7 +123,7 @@ describe('Olympus (e2e sin red externa)', () => {
             id: 'torre',
             providerId: 'olympus',
             title: 'La torre',
-            coverUrl: 'https://media.imagesolymp.xyz/covers/torre.webp',
+            coverUrl: 'https://media.imagesolymp.xyz/comics/covers/82/torre.webp',
           },
         ],
         page: 1,

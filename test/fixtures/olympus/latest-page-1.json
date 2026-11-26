@@ -4,7 +4,14 @@
     { "id": 743, "slug": "sabueso", "name": "Sabueso", "cover": "/covers/sabueso.webp", "type": "comic" },
     { "id": 81, "slug": "torre", "name": "Torre", "cover": null, "type": "novel" },
     { "id": 743, "slug": "sabueso", "name": "Sabueso (duplicado)", "cover": null, "type": "comic" },
-    { "id": 82, "slug": "torre", "name": "La torre", "cover": "https://media.imagesolymp.xyz/covers/torre.webp", "type": "comic" }
+    {
+      "id": 82,
+      "slug": "torre",
+      "name": "La torre",
+      "cover": "https://media.imagesolymp.xyz/comics/covers/82/torre.webp",
+      "cover_srcset": "https://media.imagesolymp.xyz/comics/covers/82/torre-320.webp 320w",
+      "type": "comic"
+    }
   ],
   "last_page": 20,
   "per_page": 15,

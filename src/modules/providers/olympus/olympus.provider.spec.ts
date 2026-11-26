@@ -65,7 +65,7 @@ describe('OlympusProvider', () => {
             id: 'torre',
             providerId: 'olympus',
             title: 'La torre',
-            coverUrl: 'https://media.imagesolymp.xyz/covers/torre.webp',
+            coverUrl: 'https://media.imagesolymp.xyz/comics/covers/82/torre.webp',
           },
         ],
         hasNextPage: true,
@@ -117,24 +117,30 @@ describe('OlympusProvider', () => {
     });
   });
 
-  it('omite portadas fuera del canónico y CDN', async () => {
+  it('omite portadas inválidas en búsqueda y novedades', async () => {
     const { routes, provider } = setup();
+    const data = [
+      { id: 1, slug: 'a', name: 'A', type: 'comic', cover: 'https://evil.invalid/a' },
+      { id: 2, slug: 'b', name: 'B', type: 'comic', cover: 'http://olympusxyz.com/b' },
+      { id: 3, slug: 'c', name: 'C', type: 'comic', cover: 'https://user@olympusxyz.com/c' },
+      { id: 4, slug: 'd', name: 'D', type: 'comic', cover: '  ' },
+      { id: 5, slug: 'e', name: 'E', type: 'comic', cover: 'https://[' },
+      { id: 6, slug: 'f', name: 'F', type: 'comic', cover: null },
+    ];
+    const items = data.map(({ slug: id, name: title }) => ({ id, providerId: 'olympus', title }));
     routes.set(listUrl, {
-      body: JSON.stringify({
-        data: [
-          { id: 1, slug: 'a', name: 'A', type: 'comic', cover: 'https://evil.invalid/a' },
-          { id: 2, slug: 'b', name: 'B', type: 'comic', cover: 'http://olympusxyz.com/b' },
-          { id: 3, slug: 'c', name: 'C', type: 'comic', cover: 'https://user@olympusxyz.com/c' },
-        ],
-      }),
+      body: JSON.stringify({ data }),
+    });
+    routes.set(latestUrl(1), {
+      body: JSON.stringify({ data, current_page: 1, last_page: 1 }),
     });
     await expect(provider.search('', context)).resolves.toEqual({
       status: 'ok',
-      data: [
-        { id: 'a', providerId: 'olympus', title: 'A' },
-        { id: 'b', providerId: 'olympus', title: 'B' },
-        { id: 'c', providerId: 'olympus', title: 'C' },
-      ],
+      data: items,
+    });
+    await expect(provider.listLatest(1, context)).resolves.toEqual({
+      status: 'ok',
+      data: { items, hasNextPage: false },
     });
   });
 

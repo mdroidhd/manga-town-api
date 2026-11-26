@@ -118,7 +118,8 @@ function seriesSummary(
   item: z.infer<typeof listSchema>['data'][number],
   origin: string,
 ): SeriesSummary {
-  const cover = typeof item.cover === 'string' ? safeUrl(item.cover, origin) : undefined;
+  const source = typeof item.cover === 'string' ? item.cover.trim() : '';
+  const cover = source ? safeUrl(source, origin) : undefined;
   const coverUrl =
     cover && (cover.origin === origin || cover.origin === IMAGE_ORIGIN)
       ? cover.toString()

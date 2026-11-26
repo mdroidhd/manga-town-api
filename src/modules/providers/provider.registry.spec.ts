@@ -1,18 +1,18 @@
+import { OlympusProvider } from './olympus/olympus.provider';
 import { ProviderRegistry } from './provider.registry';
-import { DemoProvider } from './demo.provider';
 
 describe('ProviderRegistry', () => {
   it('registra y expone manifiestos ordenados', () => {
     const registry = new ProviderRegistry();
-    registry.register(new DemoProvider());
+    registry.register(new OlympusProvider());
     expect(registry.size).toBe(1);
-    expect(registry.manifests()[0]?.id).toBe('demo');
+    expect(registry.manifests()[0]?.id).toBe('olympus');
   });
 
   it('rechaza ids duplicados', () => {
     const registry = new ProviderRegistry();
-    registry.register(new DemoProvider());
-    expect(() => registry.register(new DemoProvider())).toThrow(/duplicado/i);
+    registry.register(new OlympusProvider());
+    expect(() => registry.register(new OlympusProvider())).toThrow(/duplicado/i);
   });
 
   it('require lanza si no existe', () => {

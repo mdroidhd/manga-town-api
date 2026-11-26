@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 
 import { APOLLCOMICS_FETCH, ApollComicsClient } from './apollcomics/apollcomics.client';
 import { ApollComicsProvider } from './apollcomics/apollcomics.provider';
-import { DemoProvider } from './demo.provider';
 import { OLYMPUS_FETCH, OlympusClient } from './olympus/olympus.client';
 import { OlympusProvider } from './olympus/olympus.provider';
 import { ProviderRegistry } from './provider.registry';
@@ -37,7 +36,6 @@ import { ProvidersController } from './providers.controller';
       provide: ProviderRegistry,
       useFactory: (olympus: OlympusProvider, apollComics: ApollComicsProvider) => {
         const registry = new ProviderRegistry();
-        registry.register(new DemoProvider());
         registry.register(olympus);
         registry.register(apollComics);
         return registry;

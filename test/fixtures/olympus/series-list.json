@@ -1,0 +1,25 @@
+{
+  "data": [
+    {
+      "id": 743,
+      "name": "20-225: 2 Sabueso",
+      "slug": "20-225-2sabueso13424",
+      "cover": "https://media.imagesolymp.xyz/covers/20-225-2sabueso13424.webp",
+      "type": "comic"
+    },
+    {
+      "id": 812,
+      "name": "Crónica del Héroe Áureo",
+      "slug": "cronica-del-heroe-aureo",
+      "cover": "/covers/aureo.webp",
+      "type": "comic"
+    },
+    {
+      "id": 991,
+      "name": "Sabueso en novela",
+      "slug": "sabueso-novela",
+      "cover": "https://media.imagesolymp.xyz/covers/sabueso-novela.webp",
+      "type": "novel"
+    }
+  ]
+}

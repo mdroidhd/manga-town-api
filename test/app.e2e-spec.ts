@@ -23,9 +23,11 @@ describe('API (e2e)', () => {
     expect(res.body.status).toBe('ok');
   });
 
-  it('GET /v1/providers lista el provider de ejemplo', async () => {
+  it('GET /v1/providers lista demo y Olympus', async () => {
     const res = await request(app.getHttpServer()).get('/v1/providers').expect(200);
-    expect(res.body.data.map((p: { id: string }) => p.id)).toContain('demo');
+    expect(res.body.data.map((p: { id: string }) => p.id)).toEqual(
+      expect.arrayContaining(['demo', 'olympus']),
+    );
   });
 
   it('GET /v1/catalog/demo/search?q=serie devuelve resultados', async () => {

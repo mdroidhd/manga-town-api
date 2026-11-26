@@ -173,29 +173,39 @@ export class OlympusClient {
   ): Promise<{ html: string; url: string }> {
     if (!this.isCanonical(origin)) throw new OlympusError('UPSTREAM_INVALID_RESPONSE');
     const encoded = encodeURIComponent(slug);
-    const initial = new URL(`/capitulo/${chapter}/comic-${encoded}`, origin).toString();
-    const first = await this.request(initial, signal);
-    if (first.status === 200) return { html: first.body, url: initial };
-    if (first.status !== 301) {
-      this.assertStatus(first.status, true);
-      throw new OlympusError('UPSTREAM_INVALID_RESPONSE');
+    const readerPrefix = `/series/comic-${encoded}/capitulo/`;
+    let url = new URL(`/capitulo/${chapter}/comic-${encoded}`, origin).toString();
+
+    // El sitio encadena redirecciones (canónica del capítulo y, a veces, una
+    // vuelta para dejar cookie). Se siguen todas, pero solo dentro del mismo
+    // origen y con forma de lector.
+    for (let hop = 0; hop < 4; hop++) {
+      const response = await this.request(url, signal);
+      if (response.status === 200) return { html: response.body, url };
+
+      const isRedirect =
+        response.status === 301 ||
+        response.status === 302 ||
+        response.status === 303 ||
+        response.status === 307 ||
+        response.status === 308;
+      if (!isRedirect) {
+        this.assertStatus(response.status, true);
+        throw new OlympusError('UPSTREAM_INVALID_RESPONSE');
+      }
+
+      const next = response.location ? safeUrl(response.location, url) : undefined;
+      if (!next || next.origin !== origin || next.hash) {
+        throw new OlympusError('UPSTREAM_INVALID_RESPONSE');
+      }
+      const path = next.pathname;
+      if (!path.startsWith(readerPrefix) && !path.startsWith('/capitulo/')) {
+        throw new OlympusError('UPSTREAM_INVALID_RESPONSE');
+      }
+      url = next.toString();
     }
-    const target = first.location ? safeUrl(first.location, initial) : undefined;
-    const prefix = `/series/comic-${encoded}/capitulo/`;
-    const number = target?.pathname.startsWith(prefix)
-      ? target.pathname.slice(prefix.length)
-      : '';
-    if (
-      !target ||
-      target.origin !== origin ||
-      !/^\d+(?:\.\d+)?\/?$/.test(number) ||
-      target.hash
-    ) {
-      throw new OlympusError('UPSTREAM_INVALID_RESPONSE');
-    }
-    const second = await this.request(target.toString(), signal);
-    this.assertStatus(second.status, true);
-    return { html: second.body, url: target.toString() };
+
+    throw new OlympusError('UPSTREAM_INVALID_RESPONSE');
   }
 
   /**

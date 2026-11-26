@@ -122,24 +122,37 @@ describe('OlympusClient', () => {
     expect(fetchFn.mock.calls[0]?.[1]).toMatchObject({ redirect: 'manual' });
   });
 
-  it('no sigue una segunda redirección aunque sea al mismo origen', async () => {
-    const fetchFn = stubFetch()
-      .mockResolvedValueOnce(
+  it('sigue redirecciones del mismo origen y corta en bucles', async () => {
+    const fetchFn = stubFetch().mockImplementation(
+      async () =>
         new Response(null, {
-          status: 301,
+          status: 302,
           headers: { location: '/series/comic-foo/capitulo/1' },
         }),
-      )
-      .mockResolvedValueOnce(
-        new Response(null, {
-          status: 301,
-          headers: { location: '/series/comic-foo/capitulo/2' },
-        }),
-      );
+    );
     const client = new OlympusClient(fetchFn);
     await expect(client.getReaderHtml(origin, 'foo', '1')).rejects.toMatchObject({
       code: 'UPSTREAM_INVALID_RESPONSE',
     });
-    expect(fetchFn).toHaveBeenCalledTimes(2);
+    expect(fetchFn).toHaveBeenCalledTimes(4);
+  });
+
+  it('acepta la cadena 301 y 302 hasta el HTML final', async () => {
+    const fetchFn = stubFetch()
+      .mockResolvedValueOnce(
+        new Response(null, { status: 301, headers: { location: '/series/comic-foo/capitulo/7' } }),
+      )
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 302,
+          headers: { location: '/series/comic-foo/capitulo/7' },
+        }),
+      )
+      .mockResolvedValueOnce(new Response('<main class="strip"></main>', { status: 200 }));
+    const client = new OlympusClient(fetchFn);
+    await expect(client.getReaderHtml(origin, 'foo', '1')).resolves.toMatchObject({
+      url: `${origin}/series/comic-foo/capitulo/7`,
+    });
+    expect(fetchFn).toHaveBeenCalledTimes(3);
   });
 });

@@ -1,0 +1,9 @@
+{
+  "current_page": 20,
+  "data": [
+    { "id": 53, "slug": "cronicas", "name": "Crónicas", "cover": null, "type": "comic" }
+  ],
+  "last_page": 20,
+  "per_page": 15,
+  "total": 300
+}

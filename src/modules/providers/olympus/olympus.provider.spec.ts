@@ -12,6 +12,7 @@ const origin = 'https://olympusxyz.com';
 const slug = '20-225-2sabueso13424';
 const discovery = 'https://olympus.pages.dev/';
 const listUrl = `${origin}/api/series/list`;
+const latestUrl = (page: number) => `${origin}/api/new-chapters?page=${page}`;
 const detailUrl = `${origin}/api/series/${slug}?type=comic`;
 const pageUrl = (page: number) =>
   `${origin}/api/series/${slug}/chapters?page=${page}&direction=desc&type=comic`;
@@ -46,6 +47,53 @@ function setup() {
 }
 
 describe('OlympusProvider', () => {
+  it('lista una página de cómics recientes sin repetir slugs', async () => {
+    const { routes, fetchFn, provider } = setup();
+    routes.set(latestUrl(1), { body: fixture('latest-page-1.json') });
+
+    await expect(provider.listLatest(1, context)).resolves.toEqual({
+      status: 'ok',
+      data: {
+        items: [
+          {
+            id: 'sabueso',
+            providerId: 'olympus',
+            title: 'Sabueso',
+            coverUrl: `${origin}/covers/sabueso.webp`,
+          },
+          {
+            id: 'torre',
+            providerId: 'olympus',
+            title: 'La torre',
+            coverUrl: 'https://media.imagesolymp.xyz/covers/torre.webp',
+          },
+        ],
+        hasNextPage: true,
+      },
+    });
+    expect(fetchFn.mock.calls.map(([url]) => String(url))).toEqual([latestUrl(1)]);
+  });
+
+  it('usa los metadatos de Olympus aunque la página solicitada difiera de current_page', async () => {
+    const { routes, provider } = setup();
+    routes.set(latestUrl(21), { body: fixture('latest-page-1.json') });
+
+    await expect(provider.listLatest(21, context)).resolves.toMatchObject({
+      status: 'ok',
+      data: { hasNextPage: true },
+    });
+  });
+
+  it('rechaza metadatos de paginación inválidos', async () => {
+    const { routes, provider } = setup();
+    routes.set(latestUrl(1), { body: '{"data":[],"current_page":1,"last_page":"20"}' });
+
+    await expect(provider.listLatest(1, context)).resolves.toMatchObject({
+      status: 'error',
+      error: { code: 'UPSTREAM_INVALID_RESPONSE' },
+    });
+  });
+
   it('busca cómics sin distinguir tildes o mayúsculas y conserva el slug exacto', async () => {
     const { provider } = setup();
     await expect(provider.search('CRONICA DEL HEROE', context)).resolves.toEqual({

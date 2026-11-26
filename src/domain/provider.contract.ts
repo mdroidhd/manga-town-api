@@ -2,6 +2,7 @@ import type {
   ChapterSummary,
   OperationResult,
   PageRef,
+  Paginated,
   ProviderManifest,
   SeriesSummary,
 } from './provider';
@@ -25,6 +26,8 @@ export interface SeriesDetail extends SeriesSummary {
  */
 export interface Provider {
   readonly manifest: ProviderManifest;
+
+  listLatest(page: number, ctx: ProviderContext): Promise<OperationResult<Paginated<SeriesSummary>>>;
 
   search(query: string, ctx: ProviderContext): Promise<OperationResult<SeriesSummary[]>>;
 

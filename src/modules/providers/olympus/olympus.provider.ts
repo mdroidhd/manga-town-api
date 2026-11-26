@@ -5,6 +5,7 @@ import type {
   ChapterSummary,
   OperationResult,
   PageRef,
+  Paginated,
   ProviderManifest,
   SeriesSummary,
 } from '../../../domain/provider';
@@ -79,6 +80,10 @@ const listSchema = z.object({
     }),
   ),
 });
+const latestSchema = listSchema.extend({
+  current_page: z.number().int().positive().safe(),
+  last_page: z.number().int().positive().safe(),
+});
 const detailSchema = z.object({
   data: z.object({
     id: z.number().int().positive().safe(),
@@ -109,6 +114,23 @@ function parseJson<T>(body: string, schema: z.ZodType<T>): T {
   return result.data;
 }
 
+function seriesSummary(
+  item: z.infer<typeof listSchema>['data'][number],
+  origin: string,
+): SeriesSummary {
+  const cover = typeof item.cover === 'string' ? safeUrl(item.cover, origin) : undefined;
+  const coverUrl =
+    cover && (cover.origin === origin || cover.origin === IMAGE_ORIGIN)
+      ? cover.toString()
+      : undefined;
+  return {
+    id: item.slug,
+    providerId: 'olympus',
+    title: item.name,
+    ...(coverUrl ? { coverUrl } : {}),
+  };
+}
+
 interface ListEntry {
   summary: SeriesSummary;
   normalizedTitle: string;
@@ -126,6 +148,29 @@ export class OlympusProvider implements Provider {
   private readonly retryListAfter = new Map<string, number>();
 
   constructor(private readonly client: OlympusClient = new OlympusClient()) {}
+
+  listLatest(
+    page: number,
+    ctx: ProviderContext,
+  ): Promise<OperationResult<Paginated<SeriesSummary>>> {
+    return this.operation(ctx, 15_000, async (signal) => {
+      const [origin] = CANONICAL_ORIGINS;
+      const body = await this.client.getJsonText(
+        origin,
+        `/api/new-chapters?page=${page}`,
+        signal,
+        true,
+      );
+      const { data, current_page, last_page } = parseJson(body, latestSchema);
+      const results = new Map<string, SeriesSummary>();
+      for (const item of data) {
+        if (item.type === 'comic' && !results.has(item.slug)) {
+          results.set(item.slug, seriesSummary(item, origin));
+        }
+      }
+      return { items: [...results.values()], hasNextPage: current_page < last_page };
+    });
+  }
 
   search(query: string, ctx: ProviderContext): Promise<OperationResult<SeriesSummary[]>> {
     return this.operation(ctx, 15_000, async (signal) => {
@@ -271,22 +316,10 @@ export class OlympusProvider implements Provider {
     const { data } = parseJson(body, listSchema);
     const entries = data
       .filter((item) => item.type === 'comic')
-      .map((item): ListEntry => {
-        const cover = typeof item.cover === 'string' ? safeUrl(item.cover, origin) : undefined;
-        const coverUrl =
-          cover && (cover.origin === origin || cover.origin === IMAGE_ORIGIN)
-            ? cover.toString()
-            : undefined;
-        return {
-          summary: {
-            id: item.slug,
-            providerId: 'olympus',
-            title: item.name,
-            ...(coverUrl ? { coverUrl } : {}),
-          },
-          normalizedTitle: normalized(item.name),
-        };
-      });
+      .map((item) => ({
+        summary: seriesSummary(item, origin),
+        normalizedTitle: normalized(item.name),
+      }));
     return { entries, loadedAt: Date.now() };
   }
 

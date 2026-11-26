@@ -1,9 +1,10 @@
-import { load } from 'cheerio';
+import { load, type CheerioAPI } from 'cheerio';
 
 import type {
   ChapterSummary,
   OperationResult,
   PageRef,
+  Paginated,
   ProviderManifest,
   SeriesSummary,
 } from '../../../domain/provider';
@@ -90,10 +91,43 @@ function cleanText(text: string): string {
   return text.replace(/\s+/gu, ' ').trim();
 }
 
+function seriesSummaries($: CheerioAPI, selector: string, url: URL): SeriesSummary[] {
+  const results = new Map<string, SeriesSummary>();
+  $(selector).each((_index, element) => {
+    const anchor = $(element);
+    const link = mangaLink(anchor.attr('href'), url);
+    const title = cleanText(anchor.text());
+    if (!link || link.chapter || !title || results.has(link.series)) return;
+    results.set(link.series, { id: link.series, providerId: manifest.id, title });
+  });
+  return [...results.values()];
+}
+
 export class ApollComicsProvider implements Provider {
   readonly manifest = manifest;
 
   constructor(private readonly client: ApollComicsClient = new ApollComicsClient()) {}
+
+  listLatest(
+    page: number,
+    ctx: ProviderContext,
+  ): Promise<OperationResult<Paginated<SeriesSummary>>> {
+    return this.operation(async () => {
+      const path = page === 1 ? '/manga/' : `/manga/page/${page}/`;
+      const url = new URL(`${path}?m_orderby=latest`, SITE_ORIGIN);
+      const $ = load(await this.client.getHtml(url, ctx.signal, true));
+      const items = seriesSummaries($, '.page-item-detail .post-title a', url);
+      const nextPath = `/manga/page/${page + 1}`;
+      const hasNextPage = $(`a[href*="${nextPath}"]`).is((_index, element) => {
+        const next = safeUrl($(element).attr('href'), url);
+        return (
+          next?.origin === SITE_ORIGIN &&
+          (next.pathname === nextPath || next.pathname === `${nextPath}/`)
+        );
+      });
+      return { items, hasNextPage };
+    });
+  }
 
   search(query: string, ctx: ProviderContext): Promise<OperationResult<SeriesSummary[]>> {
     return this.operation(async () => {
@@ -101,17 +135,7 @@ export class ApollComicsProvider implements Provider {
       url.searchParams.set('s', query);
       url.searchParams.set('post_type', 'wp-manga');
       const $ = load(await this.client.getHtml(url, ctx.signal));
-      const results = new Map<string, SeriesSummary>();
-
-      $('.h4 a[href], .post-title a[href]').each((_index, element) => {
-        const anchor = $(element);
-        const link = mangaLink(anchor.attr('href'), url);
-        const title = cleanText(anchor.text());
-        if (!link || link.chapter || !title || results.has(link.series)) return;
-        results.set(link.series, { id: link.series, providerId: manifest.id, title });
-      });
-
-      return [...results.values()];
+      return seriesSummaries($, '.h4 a[href], .post-title a[href]', url);
     });
   }
 

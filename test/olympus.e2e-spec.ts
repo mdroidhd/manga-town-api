@@ -28,6 +28,13 @@ describe('Olympus (e2e sin red externa)', () => {
       }
       if (url === 'https://olympus.pages.dev/') return new Response(fixture('landing.html'));
       if (url === `${origin}/api/series/list`) return new Response(fixture('series-list.json'));
+      if (url === `${origin}/api/new-chapters?page=1`) {
+        return new Response(fixture('latest-page-1.json'));
+      }
+      if (url === `${origin}/api/new-chapters?page=20`) {
+        return new Response(fixture('latest-page-20.json'));
+      }
+      if (url === `${origin}/api/new-chapters?page=2`) return new Response('json inválido');
       if (url === `${origin}/api/series/${slug}?type=comic`) {
         return new Response(fixture('series-detail.json'));
       }
@@ -103,6 +110,43 @@ describe('Olympus (e2e sin red externa)', () => {
         coverUrl: `${origin}/covers/aureo.webp`,
       },
     ]);
+  });
+
+  it('devuelve cómics recientes sin duplicados e indica la última página', async () => {
+    await request(app.getHttpServer())
+      .get('/v1/catalog/olympus/latest?page=1')
+      .expect(200, {
+        data: [
+          {
+            id: 'sabueso',
+            providerId: 'olympus',
+            title: 'Sabueso',
+            coverUrl: `${origin}/covers/sabueso.webp`,
+          },
+          {
+            id: 'torre',
+            providerId: 'olympus',
+            title: 'La torre',
+            coverUrl: 'https://media.imagesolymp.xyz/covers/torre.webp',
+          },
+        ],
+        page: 1,
+        hasNextPage: true,
+      });
+    await request(app.getHttpServer())
+      .get('/v1/catalog/olympus/latest?page=20')
+      .expect(200, {
+        data: [{ id: 'cronicas', providerId: 'olympus', title: 'Crónicas' }],
+        page: 20,
+        hasNextPage: false,
+      });
+  });
+
+  it('devuelve UPSTREAM_INVALID_RESPONSE si el listado reciente contiene JSON inválido', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/v1/catalog/olympus/latest?page=2')
+      .expect(502);
+    expect(response.body.error.code).toBe('UPSTREAM_INVALID_RESPONSE');
   });
 
   it('consulta la ficha por slug', async () => {

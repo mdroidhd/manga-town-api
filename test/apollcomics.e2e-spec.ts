@@ -12,6 +12,7 @@ const fixture = (name: string): string =>
   readFileSync(join(process.cwd(), 'test/fixtures/apollcomics', name), 'utf8');
 const origin = 'https://apollcomics.es';
 const catalog = '/v1/catalog/apollcomics';
+const latestFirstPageUrl = `${origin}/manga/?m_orderby=latest`;
 const slug = 'el-invocador-solitario-de-clase-sss';
 const seriesUrl = `${origin}/manga/${slug}/`;
 
@@ -27,9 +28,20 @@ describe('Apoll Comics (e2e sin red externa)', () => {
         unexpected.push(url);
         throw new Error('Opciones HTTP inesperadas');
       }
+      if (url.includes('/page/1/')) {
+        return new Response(null, { status: 301, headers: { location: latestFirstPageUrl } });
+      }
       switch (url) {
         case `${origin}/?s=invocador+%26+acci%C3%B3n&post_type=wp-manga`:
           return new Response(fixture('search.html'));
+        case latestFirstPageUrl:
+          return new Response(fixture('latest-page-1.html'));
+        case `${origin}/manga/page/2/?m_orderby=latest`:
+          return new Response(fixture('latest-page-2.html'));
+        case `${origin}/manga/page/3/?m_orderby=latest`:
+          return new Response(fixture('latest-page-3.html'));
+        case `${origin}/manga/page/99999/?m_orderby=latest`:
+          return new Response(null, { status: 404 });
         case seriesUrl:
           return new Response(fixture('series.html'));
         case `${seriesUrl}?style=list`:
@@ -103,6 +115,51 @@ describe('Apoll Comics (e2e sin red externa)', () => {
       { id: 'leviatan', providerId: 'apollcomics', title: 'Leviatán' },
     ]);
     expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('consulta directamente la URL canónica al pedir la página 1 de novedades', async () => {
+    await request(app.getHttpServer()).get(`${catalog}/latest?page=1`).expect(200);
+
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(fetchFn).toHaveBeenCalledWith(
+      latestFirstPageUrl,
+      expect.objectContaining({ method: 'GET', redirect: 'manual' }),
+    );
+  });
+
+  it('devuelve páginas distintas de novedades con la señal de página siguiente', async () => {
+    await request(app.getHttpServer())
+      .get(`${catalog}/latest`)
+      .expect(200, {
+        data: [
+          { id: 'invocador', providerId: 'apollcomics', title: 'El invocador' },
+          { id: 'leviatan', providerId: 'apollcomics', title: 'Leviatán' },
+        ],
+        page: 1,
+        hasNextPage: true,
+      });
+    await request(app.getHttpServer())
+      .get(`${catalog}/latest?page=2`)
+      .expect(200, {
+        data: [{ id: 'el-archivo', providerId: 'apollcomics', title: 'El archivo' }],
+        page: 2,
+        hasNextPage: true,
+      });
+    await request(app.getHttpServer())
+      .get(`${catalog}/latest?page=3`)
+      .expect(200, {
+        data: [{ id: 'los-viajeros', providerId: 'apollcomics', title: 'Los viajeros' }],
+        page: 3,
+        hasNextPage: false,
+      });
+    expect(fetchFn).toHaveBeenCalledTimes(3);
+  });
+
+  it('devuelve NOT_FOUND cuando una página de novedades responde 404', async () => {
+    const response = await request(app.getHttpServer())
+      .get(`${catalog}/latest?page=99999`)
+      .expect(404);
+    expect(response.body.error.code).toBe('NOT_FOUND');
   });
 
   it('consulta la ficha por slug e incluye los campos disponibles', async () => {

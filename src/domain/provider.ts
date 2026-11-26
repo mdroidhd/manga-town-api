@@ -60,6 +60,8 @@ export type OperationResult<T> =
   | { status: 'client_action_required'; continuationId: string; action: ClientAction; expiresAt: string }
   | { status: 'error'; error: OperationError };
 
+export type Paginated<T> = { items: T[]; hasNextPage: boolean };
+
 export interface PageRef {
   index: number;
   /** URL que la app puede descargar directamente, si la fuente lo permite. */

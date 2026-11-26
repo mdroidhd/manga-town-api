@@ -1,7 +1,12 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { ApollComicsClient } from './apollcomics.client';
 import { ApollComicsProvider } from './apollcomics.provider';
 
 const ctx = { userId: 'test' };
+const fixture = (name: string): string =>
+  readFileSync(join(process.cwd(), 'test/fixtures/apollcomics', name), 'utf8');
 
 describe('ApollComicsProvider', () => {
   let fetchFn: jest.MockedFunction<typeof fetch>;
@@ -10,6 +15,37 @@ describe('ApollComicsProvider', () => {
   beforeEach(() => {
     fetchFn = jest.fn();
     provider = new ApollComicsProvider(new ApollComicsClient(fetchFn));
+  });
+
+  it('extrae títulos de novedades y detecta el enlace a la página siguiente', async () => {
+    fetchFn.mockResolvedValueOnce(new Response(fixture('latest-page-1.html')));
+
+    await expect(provider.listLatest(1, ctx)).resolves.toEqual({
+      status: 'ok',
+      data: {
+        items: [
+          { id: 'invocador', providerId: 'apollcomics', title: 'El invocador' },
+          { id: 'leviatan', providerId: 'apollcomics', title: 'Leviatán' },
+        ],
+        hasNextPage: true,
+      },
+    });
+    expect(fetchFn).toHaveBeenCalledWith(
+      'https://apollcomics.es/manga/?m_orderby=latest',
+      expect.objectContaining({ method: 'GET', redirect: 'manual' }),
+    );
+  });
+
+  it('requiere un enlace al número exacto de la página siguiente', async () => {
+    fetchFn.mockResolvedValueOnce(new Response(fixture('latest-page-3.html')));
+
+    await expect(provider.listLatest(3, ctx)).resolves.toEqual({
+      status: 'ok',
+      data: {
+        items: [{ id: 'los-viajeros', providerId: 'apollcomics', title: 'Los viajeros' }],
+        hasNextPage: false,
+      },
+    });
   });
 
   it('extrae el título y el slug de un enlace dentro de h3.h4 de Madara', async () => {

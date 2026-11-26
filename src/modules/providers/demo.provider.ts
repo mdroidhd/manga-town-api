@@ -3,6 +3,7 @@ import type {
   ChapterSummary,
   OperationResult,
   PageRef,
+  Paginated,
   ProviderManifest,
   SeriesSummary,
 } from '../../domain/provider';
@@ -40,6 +41,15 @@ const SERIES: SeriesDetail[] = [
  */
 export class DemoProvider implements Provider {
   readonly manifest = manifest;
+
+  async listLatest(
+    page: number,
+    _ctx: ProviderContext,
+  ): Promise<OperationResult<Paginated<SeriesSummary>>> {
+    const items =
+      page === 1 ? SERIES.map(({ id, providerId, title }) => ({ id, providerId, title })) : [];
+    return { status: 'ok', data: { items, hasNextPage: false } };
+  }
 
   async search(query: string, _ctx: ProviderContext): Promise<OperationResult<SeriesSummary[]>> {
     const needle = query.trim().toLowerCase();

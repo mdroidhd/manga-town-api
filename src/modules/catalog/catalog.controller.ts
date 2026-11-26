@@ -55,6 +55,22 @@ export class CatalogController {
     return found;
   }
 
+  @Get(':provider/latest')
+  @ApiOperation({ summary: 'Lista las series actualizadas recientemente en una extensión' })
+  @ApiQuery({ name: 'page', required: false, schema: { type: 'integer', minimum: 1, default: 1 } })
+  async latest(@Param('provider') providerId: string, @Query('page') query: unknown = '1') {
+    const page = typeof query === 'string' && /^\d+$/.test(query) ? Number(query) : NaN;
+    if (!Number.isSafeInteger(page) || page < 1) {
+      throw new BadRequestException({
+        code: 'INVALID_QUERY',
+        message: 'El parámetro page debe ser un entero mayor o igual a 1',
+      });
+    }
+    const result = await this.provider(providerId).listLatest(page, { userId: 'anonymous' });
+    const { items, hasNextPage } = unwrap(result);
+    return { data: items, page, hasNextPage };
+  }
+
   @Get(':provider/search')
   @ApiOperation({ summary: 'Busca series en una extensión' })
   @ApiQuery({ name: 'q', required: true })

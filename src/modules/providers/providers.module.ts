@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 
+import { APOLLCOMICS_FETCH, ApollComicsClient } from './apollcomics/apollcomics.client';
+import { ApollComicsProvider } from './apollcomics/apollcomics.provider';
 import { DemoProvider } from './demo.provider';
 import { OLYMPUS_FETCH, OlympusClient } from './olympus/olympus.client';
 import { OlympusProvider } from './olympus/olympus.provider';
@@ -20,15 +22,27 @@ import { ProvidersController } from './providers.controller';
       useFactory: (client: OlympusClient) => new OlympusProvider(client),
       inject: [OlympusClient],
     },
+    { provide: APOLLCOMICS_FETCH, useFactory: () => globalThis.fetch },
+    {
+      provide: ApollComicsClient,
+      useFactory: (fetchFn: typeof fetch) => new ApollComicsClient(fetchFn),
+      inject: [APOLLCOMICS_FETCH],
+    },
+    {
+      provide: ApollComicsProvider,
+      useFactory: (client: ApollComicsClient) => new ApollComicsProvider(client),
+      inject: [ApollComicsClient],
+    },
     {
       provide: ProviderRegistry,
-      useFactory: (olympus: OlympusProvider) => {
+      useFactory: (olympus: OlympusProvider, apollComics: ApollComicsProvider) => {
         const registry = new ProviderRegistry();
         registry.register(new DemoProvider());
         registry.register(olympus);
+        registry.register(apollComics);
         return registry;
       },
-      inject: [OlympusProvider],
+      inject: [OlympusProvider, ApollComicsProvider],
     },
   ],
   exports: [ProviderRegistry],

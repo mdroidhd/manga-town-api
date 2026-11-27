@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { OperationResult } from '../../domain/provider';
 import { MemoryCacheStore } from './memory-cache.store';
@@ -81,9 +81,15 @@ export class CacheService implements OnModuleDestroy {
     await Promise.allSettled(inflight);
     await this.memory.purge(prefix);
     if (this.redis) {
-      await this.redis.purge(prefix);
-      this.epoch = await this.redis.incrementEpoch();
-      this.lastEpochCheck = Date.now();
+      try {
+        await this.redis.purge(prefix);
+        this.epoch = await this.redis.incrementEpoch();
+        this.lastEpochCheck = Date.now();
+      } catch {
+        this.epoch = undefined;
+        this.lastEpochCheck = 0;
+        throw new ServiceUnavailableException({statusCode: 503, code: 'CACHE_UNAVAILABLE', message: 'No se pudo completar la purga compartida de caché'});
+      }
     }
   }
   onModuleDestroy() { this.redis?.close(); }

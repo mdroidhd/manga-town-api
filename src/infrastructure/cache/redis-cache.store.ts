@@ -5,11 +5,19 @@ export class RedisCacheStore implements CacheStore {
   private readonly client: Redis;
   private readonly logger = new Logger(RedisCacheStore.name);
   private readonly epochKey: string;
+  private unavailable = false;
   constructor(url: string, prefix: string) {
     this.epochKey = prefix + 'epoch';
     this.client = new Redis(url, {lazyConnect: true, enableOfflineQueue: false, maxRetriesPerRequest: 1, connectTimeout: 1000});
-    this.client.on('error', () => this.logger.warn('Redis no disponible; usando L1'));
-    void this.client.connect().catch(() => this.logger.warn('Redis no disponible; usando L1'));
+    this.client.on('error', () => this.markUnavailable());
+    this.client.on('ready', () => { this.unavailable = false; });
+    this.client.on('close', () => this.markUnavailable());
+    void this.client.connect().catch(() => this.markUnavailable());
+  }
+  private markUnavailable() {
+    if (this.unavailable) return;
+    this.unavailable = true;
+    this.logger.warn('Redis no disponible; usando L1');
   }
   async get(key: string) {
     if (this.client.status !== 'ready') return undefined;
@@ -22,7 +30,7 @@ export class RedisCacheStore implements CacheStore {
   }
   async set(key: string, value: CachedValue, ttlMs: number) {
     if (this.client.status !== 'ready') return;
-    try { await this.client.set(key, JSON.stringify(value), 'PX', Math.max(1, Math.floor(ttlMs))); } catch { this.logger.warn('Error de escritura Redis'); }
+    try { await this.client.set(key, JSON.stringify(value), 'PX', Math.max(1, Math.floor(ttlMs))); } catch { this.markUnavailable(); }
   }
   async getEpoch() {
     if (this.client.status !== 'ready') return undefined;
@@ -42,5 +50,5 @@ export class RedisCacheStore implements CacheStore {
       if (dataKeys.length) await this.client.del(...dataKeys);
     } while (cursor !== '0');
   }
-  close() { this.client.disconnect(); }
+  close() { this.client.removeAllListeners('close'); this.client.disconnect(); }
 }

@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { json } from 'express';
 
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -10,6 +11,7 @@ import type { Env } from './config/env';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: false });
+  app.use(json({ limit: '32mb' }));
   const config = app.get(ConfigService<Env, true>);
 
   const prefix = config.get('API_PREFIX', { infer: true });

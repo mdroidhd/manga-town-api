@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { load } from 'cheerio';
 import { z } from 'zod';
 
@@ -37,7 +38,7 @@ const manifest: ProviderManifest = {
   capabilities: {
     login: 'none',
     captcha: 'none',
-    pages: 'server',
+    pages: 'app',
     deviceEgress: false,
   },
 };
@@ -248,35 +249,61 @@ export class OlympusProvider implements Provider {
       }
       const origin = await this.client.getOrigin(signal);
       const { html, url } = await this.client.getReaderHtml(origin, id, chapter, signal);
-      const $ = load(html);
-      const panels = $('main.strip div.panel');
-      if (panels.length === 0) throw new OlympusError('UPSTREAM_INVALID_RESPONSE');
-
-      const pages: PageRef[] = [];
-      panels.each((_position, panel) => {
-        const item = $(panel);
-        const rawIndex = item.attr('data-i');
-        const images = item.children('img');
-        const source = images.first().attr('src');
-        const image = source ? safeUrl(source, url) : undefined;
-        if (
-          !rawIndex ||
-          !/^\d+$/.test(rawIndex) ||
-          !Number.isSafeInteger(Number(rawIndex)) ||
-          images.length !== 1 ||
-          !image ||
-          image.origin !== IMAGE_ORIGIN
-        ) {
-          throw new OlympusError('UPSTREAM_INVALID_RESPONSE');
-        }
-        pages.push({ index: Number(rawIndex), url: image.toString() });
-      });
-      pages.sort((a, b) => a.index - b.index);
-      if (pages.some((page, index) => page.index !== index)) {
-        throw new OlympusError('UPSTREAM_INVALID_RESPONSE');
-      }
-      return pages;
+      return this.extractPages(html, url);
     });
+  }
+
+  getPageFetchAction(id: string, chapter: string) {
+    if (!validSlug(id) || !/^0*[1-9]\d*$/.test(chapter)) {
+      throw new BadRequestException({ code: 'INVALID_PAGE_ID', message: 'Identificador inválido' });
+    }
+    return {
+      type: 'fetch_html' as const,
+      expect: 'html' as const,
+      url: `${CANONICAL_ORIGINS[0]}/capitulo/${encodeURIComponent(chapter)}/comic-${encodeURIComponent(id)}`,
+      provider: this.manifest.id,
+      seriesId: id,
+      chapterId: chapter,
+    };
+  }
+
+  parsePages(html: string, _ctx: ProviderContext): OperationResult<PageRef[]> {
+    try {
+      return { status: 'ok', data: this.extractPages(html, CANONICAL_ORIGINS[0]) };
+    } catch {
+      return { status: 'error', error: { code: 'INVALID_HTML', message: 'HTML sin paneles válidos' } };
+    }
+  }
+
+  private extractPages(html: string, url: string): PageRef[] {
+  const $ = load(html);
+  const panels = $('main.strip div.panel');
+  if (panels.length === 0) throw new OlympusError('UPSTREAM_INVALID_RESPONSE');
+
+  const pages: PageRef[] = [];
+  panels.each((_position, panel) => {
+    const item = $(panel);
+    const rawIndex = item.attr('data-i');
+    const images = item.children('img');
+    const source = images.first().attr('src');
+    const image = source ? safeUrl(source, url) : undefined;
+    if (
+      !rawIndex ||
+      !/^\d+$/.test(rawIndex) ||
+      !Number.isSafeInteger(Number(rawIndex)) ||
+      images.length !== 1 ||
+      !image ||
+      image.origin !== IMAGE_ORIGIN
+    ) {
+      throw new OlympusError('UPSTREAM_INVALID_RESPONSE');
+    }
+    pages.push({ index: Number(rawIndex), url: image.toString() });
+  });
+  pages.sort((a, b) => a.index - b.index);
+  if (pages.some((page, index) => page.index !== index)) {
+    throw new OlympusError('UPSTREAM_INVALID_RESPONSE');
+  }
+  return pages;
   }
 
   private async getList(origin: string, signal: AbortSignal): Promise<ListSnapshot> {

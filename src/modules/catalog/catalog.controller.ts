@@ -1,5 +1,8 @@
 import {
   BadRequestException,
+  Body,
+  Post,
+  HttpCode,
   Controller,
   Get,
   HttpException,
@@ -99,8 +102,32 @@ export class CatalogController {
     @Param('provider') providerId: string,
     @Param('id') id: string,
     @Param('chapter') chapter: string,
+    @Res({ passthrough: true }) response?: Response,
   ) {
-    const result = await this.catalog.provider(providerId).getPages(id, chapter, { userId: 'anonymous' });
+    const provider = this.catalog.provider(providerId);
+    if (provider.manifest.capabilities.pages === 'app') {
+      if (!provider.getPageFetchAction) throw new HttpException({ code: 'ACTION_NOT_SUPPORTED', message: 'Acción no disponible' }, 500);
+      response?.status(HttpStatus.ACCEPTED);
+      return { status: 'client_action_required', action: provider.getPageFetchAction(id, chapter) };
+    }
+    const result = await provider.getPages(id, chapter, { userId: 'anonymous' });
+    return { data: unwrap(result) };
+  }
+
+  @Post(':provider/series/:id/chapters/:chapter/pages')
+  @HttpCode(200)
+  parsePages(@Param('provider') providerId: string, @Body() body: unknown) {
+    const provider = this.catalog.provider(providerId);
+    if (!provider.parsePages) throw new BadRequestException({ code: 'PARSE_NOT_SUPPORTED', message: 'El provider no admite parseo' });
+    if (!body || typeof body !== 'object' || typeof (body as { html?: unknown }).html !== 'string') {
+      throw new BadRequestException({ code: 'INVALID_BODY', message: 'Se requiere html como texto' });
+    }
+    const html = (body as { html: string }).html;
+    if (Buffer.byteLength(html, 'utf8') > 5 * 1024 * 1024) {
+      throw new HttpException({ code: 'HTML_TOO_LARGE', message: 'HTML excede 5 MB' }, HttpStatus.PAYLOAD_TOO_LARGE);
+    }
+    const result = provider.parsePages(html, { userId: 'anonymous' });
+    if (result.status === 'error' && result.error.code === 'INVALID_HTML') throw new HttpException(result.error, HttpStatus.UNPROCESSABLE_ENTITY);
     return { data: unwrap(result) };
   }
 }

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
+import { json } from 'express';
 
 import { AppModule } from '../src/app.module';
 import { OLYMPUS_FETCH } from '../src/modules/providers/olympus/olympus.client';
@@ -70,6 +71,7 @@ describe('Olympus (e2e sin red externa)', () => {
       .useValue(fetchFn)
       .compile();
     app = moduleRef.createNestApplication();
+    app.use(json({ limit: '32mb' }));
     app.setGlobalPrefix('v1');
     await app.init();
     expect(fetchFn).not.toHaveBeenCalled();
@@ -89,7 +91,7 @@ describe('Olympus (e2e sin red externa)', () => {
       contractVersion: 1,
       kinds: ['comic'],
       languages: ['es'],
-      capabilities: { login: 'none', captcha: 'none', pages: 'server', deviceEgress: false },
+      capabilities: { login: 'none', captcha: 'none', pages: 'app', deviceEgress: false },
     });
     expect(fetchFn).not.toHaveBeenCalled();
   });
@@ -169,19 +171,22 @@ describe('Olympus (e2e sin red externa)', () => {
     ]);
   });
 
-  it('sigue un 301 autorizado y ordena las páginas del lector', async () => {
-    const response = await request(app.getHttpServer())
-      .get(`/v1/catalog/olympus/series/${slug}/chapters/135953/pages`)
-      .expect(200);
-    expect(response.body.data).toEqual(
-      [0, 1, 2].map((index) => ({
-        index,
-        url: `https://media.imagesolymp.xyz/comics/743/135953/${index}_${index + 1}.webp`,
-      })),
-    );
-    const called = fetchFn.mock.calls.map(([input]) => String(input));
-    expect(called).toContain(`${origin}/capitulo/135953/comic-${slug}`);
-    expect(called).toContain(origin + readerPath);
+  it('solicita al cliente el HTML y parsea el fixture', async () => {
+    const path = `/v1/catalog/olympus/series/${slug}/chapters/135953/pages`;
+    fetchFn.mockClear();
+    await request(app.getHttpServer()).get(path).expect(202, {
+      status: 'client_action_required',
+      action: { type: 'fetch_html', expect: 'html', url: `${origin}/capitulo/135953/comic-${slug}`, provider: 'olympus', seriesId: slug, chapterId: '135953' },
+    });
+    expect(fetchFn).not.toHaveBeenCalled();
+    const response = await request(app.getHttpServer()).post(path).send({ html: fixture('chapter.html') }).expect(200);
+    expect(response.body.data).toEqual([0, 1, 2].map((index) => ({ index, url: `https://media.imagesolymp.xyz/comics/743/135953/${index}_${index + 1}.webp` })));
+    const invalid = await request(app.getHttpServer()).post(path).send({ html: '<html></html>' }).expect(422);
+    expect(invalid.body.error.code).toBe('INVALID_HTML');
+    await request(app.getHttpServer()).post(path).send({ html: 'x'.repeat(5 * 1024 * 1024 + 1) }).expect(413);
+    await request(app.getHttpServer()).post(path).send({ html: 123 }).expect(400);
+    const unsupported = await request(app.getHttpServer()).post('/v1/catalog/apollcomics/series/a/chapters/b/pages').send({ html: '<html></html>' }).expect(400);
+    expect(unsupported.body.error.code).toBe('PARSE_NOT_SUPPORTED');
   });
 
   it('devuelve 404 NOT_FOUND para ficha inexistente', async () => {
@@ -191,18 +196,4 @@ describe('Olympus (e2e sin red externa)', () => {
     expect(response.body.error.code).toBe('NOT_FOUND');
   });
 
-  it('rechaza un Location externo sin contactar ese host', async () => {
-    const response = await request(app.getHttpServer())
-      .get('/v1/catalog/olympus/series/externa/chapters/7/pages')
-      .expect(502);
-    expect(response.body.error.code).toBe('UPSTREAM_INVALID_RESPONSE');
-    expect(fetchFn.mock.calls.some(([input]) => String(input).includes('evil.invalid'))).toBe(false);
-  });
-
-  it('devuelve 502 ante lector sin paneles válidos', async () => {
-    const response = await request(app.getHttpServer())
-      .get('/v1/catalog/olympus/series/vacia/chapters/8/pages')
-      .expect(502);
-    expect(response.body.error.code).toBe('UPSTREAM_INVALID_RESPONSE');
-  });
 });

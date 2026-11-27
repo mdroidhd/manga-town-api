@@ -35,6 +35,10 @@ export interface Provider {
 
   listChapters(id: string, ctx: ProviderContext): Promise<OperationResult<ChapterSummary[]>>;
 
+  getPageFetchAction?(id: string, chapter: string): { type: 'fetch_html'; expect: 'html'; url: string; provider: string; seriesId: string; chapterId: string };
+
+  parsePages?(html: string, ctx: ProviderContext): OperationResult<PageRef[]>;
+
   getPages(
     id: string,
     chapter: string,

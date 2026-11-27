@@ -23,6 +23,7 @@ type Reply = { body?: string; status?: number; location?: string };
 
 function setup() {
   const routes = new Map<string, Reply>([
+    [`${origin}/`, { body: '' }],
     [discovery, { body: fixture('landing.html') }],
     [listUrl, { body: fixture('series-list.json') }],
     [detailUrl, { body: fixture('series-detail.json') }],
@@ -221,6 +222,7 @@ describe('OlympusProvider', () => {
     });
     expect(fetchFn.mock.calls.map(([url]) => String(url))).toEqual([
       discovery,
+      `${origin}/`,
       readerUrl,
       destinationUrl,
     ]);

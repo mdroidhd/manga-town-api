@@ -15,6 +15,12 @@ const REQUEST_TIMEOUT_MS = 5_000;
 const ORIGIN_TTL_MS = 60 * 60_000;
 const ORIGIN_MAX_AGE_MS = 24 * ORIGIN_TTL_MS;
 const RETRY_DELAY_MS = 30_000;
+const WARM_TTL_MS = 5 * 60_000;
+const BROWSER_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
+  Accept: 'text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'es-ES,es;q=0.9',
+};
 
 export type OlympusErrorCode =
   | 'NOT_FOUND'
@@ -93,6 +99,9 @@ export class OlympusClient {
   private originFlight?: Promise<string>;
   private retryOriginAfter = 0;
   private originFailure?: OlympusError;
+  private warmedAt?: number;
+  private warmFlight?: Promise<void>;
+  private cookies = new Map<string, string>();
 
   constructor(private readonly fetchFn: typeof fetch = globalThis.fetch) {}
 
@@ -174,38 +183,56 @@ export class OlympusClient {
     if (!this.isCanonical(origin)) throw new OlympusError('UPSTREAM_INVALID_RESPONSE');
     const encoded = encodeURIComponent(slug);
     const readerPrefix = `/series/comic-${encoded}/capitulo/`;
-    let url = new URL(`/capitulo/${chapter}/comic-${encoded}`, origin).toString();
-
-    // El sitio encadena redirecciones (canónica del capítulo y, a veces, una
-    // vuelta para dejar cookie). Se siguen todas, pero solo dentro del mismo
-    // origen y con forma de lector.
-    for (let hop = 0; hop < 4; hop++) {
-      const response = await this.request(url, signal);
-      if (response.status === 200) return { html: response.body, url };
-
-      const isRedirect =
-        response.status === 301 ||
-        response.status === 302 ||
-        response.status === 303 ||
-        response.status === 307 ||
-        response.status === 308;
-      if (!isRedirect) {
-        this.assertStatus(response.status, true);
-        throw new OlympusError('UPSTREAM_INVALID_RESPONSE');
+    const original = new URL(`/capitulo/${chapter}/comic-${encoded}`, origin).toString();
+    await this.warmUp(origin, signal);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let url = original;
+      let retry = false;
+      for (let hop = 0; hop < 4; hop++) {
+        const response = await this.request(url, signal);
+        if (response.status === 200) {
+          const $ = load(response.body);
+          const placeholder = /zonaolympus\.milkchoco\.online/i.test(response.body) ||
+            $('img').toArray().some((img) => {
+              const src = $(img).attr('src');
+              const image = src ? safeUrl(src, url) : undefined;
+              return image ? /^\/cp\/cp-[^/]+\.jpg$/i.test(image.pathname) : false;
+            });
+          if (!placeholder) return { html: response.body, url };
+          retry = true;
+          break;
+        }
+        if (![301, 302, 303, 307, 308].includes(response.status)) {
+          this.assertStatus(response.status, true);
+          throw new OlympusError('UPSTREAM_INVALID_RESPONSE');
+        }
+        const next = response.location ? safeUrl(response.location, url) : undefined;
+        if (!next || next.hash) throw new OlympusError('UPSTREAM_INVALID_RESPONSE');
+        if (next.origin !== origin) { retry = true; break; }
+        if (!next.pathname.startsWith(readerPrefix) && !next.pathname.startsWith('/capitulo/')) {
+          throw new OlympusError('UPSTREAM_INVALID_RESPONSE');
+        }
+        url = next.toString();
       }
-
-      const next = response.location ? safeUrl(response.location, url) : undefined;
-      if (!next || next.origin !== origin || next.hash) {
-        throw new OlympusError('UPSTREAM_INVALID_RESPONSE');
-      }
-      const path = next.pathname;
-      if (!path.startsWith(readerPrefix) && !path.startsWith('/capitulo/')) {
-        throw new OlympusError('UPSTREAM_INVALID_RESPONSE');
-      }
-      url = next.toString();
+      if (!retry || attempt === 1) throw new OlympusError('UPSTREAM_INVALID_RESPONSE');
+      await this.warmUp(origin, signal, true);
     }
-
     throw new OlympusError('UPSTREAM_INVALID_RESPONSE');
+  }
+
+  private async warmUp(origin: string, signal?: AbortSignal, force = false): Promise<void> {
+    if (signal?.aborted) throw signal.reason;
+    if (!force && this.warmedAt !== undefined && Date.now() - this.warmedAt <= WARM_TTL_MS) return;
+    if (!this.warmFlight) {
+      const flight = (async () => {
+        const response = await this.request(origin + '/');
+        this.assertStatus(response.status);
+        this.warmedAt = Date.now();
+      })();
+      this.warmFlight = flight;
+      void flight.finally(() => { if (this.warmFlight === flight) this.warmFlight = undefined; }).catch(() => undefined);
+    }
+    await waitFor(this.warmFlight, signal);
   }
 
   /**
@@ -251,9 +278,28 @@ export class OlympusClient {
     );
     try {
       const response = await waitFor(
-        this.fetchFn(url, { method: 'GET', redirect, signal: controller.signal }),
+        this.fetchFn(url, { method: 'GET', redirect, signal: controller.signal, headers: {
+          ...BROWSER_HEADERS,
+          ...(this.isCanonical(new URL(url).origin) && this.cookies.size ? { Cookie: [...this.cookies].map(([name, value]) => `${name}=${value}`).join('; ') } : {}),
+        } }),
         controller.signal,
       );
+      if (this.isCanonical(new URL(url).origin) && redirect === 'manual') {
+        const headers = response.headers as Headers & { getSetCookie?: () => string[] };
+        const setCookies = headers.getSetCookie?.() ?? (headers.get('set-cookie') ? [headers.get('set-cookie')!] : []);
+        for (const cookie of setCookies) {
+          const parts = cookie.split(';').map((part) => part.trim());
+          const domain = parts.find((part) => /^domain=/i.test(part))?.slice(7).replace(/^\./, '').toLowerCase();
+          const path = parts.find((part) => /^path=/i.test(part))?.slice(5);
+          if ((domain && domain !== new URL(url).hostname) || (path && path !== '/')) continue;
+          const pair = parts[0] ?? '';
+          const eq = pair.indexOf('=');
+          if (eq <= 0) continue;
+          const name = pair.slice(0, eq);
+          if (parts.some((part) => /^max-age=0$/i.test(part))) this.cookies.delete(name);
+          else this.cookies.set(name, pair.slice(eq + 1));
+        }
+      }
       // Solo se consume el cuerpo de respuestas que lo necesitan; el plazo
       // sigue activo hasta haber terminado de leerlo.
       const body =

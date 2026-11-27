@@ -26,6 +26,7 @@ describe('Olympus (e2e sin red externa)', () => {
       if (init?.redirect !== 'manual' || init.method !== 'GET') {
         throw new Error('HTTP options invalid');
       }
+      if (url === `${origin}/`) return new Response('home');
       if (url === 'https://olympus.pages.dev/') return new Response(fixture('landing.html'));
       if (url === `${origin}/api/series/list`) return new Response(fixture('series-list.json'));
       if (url === `${origin}/api/new-chapters?page=1`) {

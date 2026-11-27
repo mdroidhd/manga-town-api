@@ -56,7 +56,7 @@ La aplicación, el mapeo y los healthchecks de Dockerfile y Compose usan el puer
 
 4. Despliega la aplicación. Comprueba que `/v1/health` responde a través de la URL configurada.
 
-Si cambias `PORT`, actualiza el puerto de Coolify y el healthcheck del Dockerfile; si cambias `API_PREFIX`, actualiza también las rutas de salud del Dockerfile y de Coolify. PostgreSQL y Redis aún no son necesarios para la API. Cuando se usen, añádelos como recursos separados en Coolify y configura las URLs de conexión correspondientes.
+Si cambias `PORT`, actualiza el puerto de Coolify y el healthcheck del Dockerfile; si cambias `API_PREFIX`, actualiza también las rutas de salud del Dockerfile y de Coolify. PostgreSQL no es necesario actualmente. Redis es opcional y puede añadirse como recurso separado en Coolify para compartir la caché entre instancias.
 
 ## Contrato de provider
 
@@ -81,7 +81,7 @@ src/
   modules/             casos de uso (catalog, providers, sessions, continuations, reader)
 ```
 
-`infrastructure/` y los módulos `sessions`, `continuations` y `reader` están creados pero vacíos: son las siguientes piezas del diseño.
+La infraestructura de caché está implementada; los módulos `sessions`, `continuations` y `reader` son piezas pendientes.
 
 ## Scripts
 
@@ -92,3 +92,11 @@ src/
 | `npm run lint` | ESLint sin warnings |
 | `npm test` | Tests unitarios |
 | `npm run test:e2e` | Tests e2e |
+
+### Caché de catálogo
+
+El catálogo usa L1 en memoria (máximo 30 segundos) y Redis opcional compartido. Para activarlo en Coolify, configura `REDIS_URL` con la URL interna de Redis, por ejemplo `redis://redis:6379`, y redespliega la API. Sin Redis o ante un fallo, funciona en modo degradado con L1; `/v1/health` no depende de Redis. `CACHE_PREFIX` permite separar instalaciones (por defecto `mangatown:`).
+
+Los TTL en segundos son configurables con `CACHE_TTL_SEARCH` (600), `CACHE_TTL_LATEST` (120), `CACHE_TTL_SERIES` (3600) y `CACHE_TTL_CHAPTERS` (1800). El TTL de novedades es deliberadamente corto. `X-Cache` indica `MISS`, `HIT-L1` o `HIT-L2`; solo se almacenan resultados exitosos.
+
+Para habilitar la purga interna, configura un valor secreto en `CACHE_PURGE_TOKEN`. Envía `POST /v1/cache/purge` con cabecera `x-cache-token` y cuerpo `{ "provider": "olympus" }` o `{ "all": true }`. Sin token configurado, la ruta devuelve 404. Protege este token como cualquier secreto de despliegue.

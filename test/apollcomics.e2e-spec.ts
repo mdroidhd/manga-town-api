@@ -5,6 +5,7 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 
+import { CacheService } from '../src/infrastructure/cache/cache.service';
 import { AppModule } from '../src/app.module';
 import { APOLLCOMICS_FETCH } from '../src/modules/providers/apollcomics/apollcomics.client';
 
@@ -75,13 +76,24 @@ describe('Apoll Comics (e2e sin red externa)', () => {
     expect(fetchFn).not.toHaveBeenCalled();
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await app.get(CacheService).purge();
     fetchFn.mockClear();
   });
 
   afterAll(async () => {
     await app.close();
     expect(unexpected).toEqual([]);
+  });
+
+  it('reutiliza resultados pero no errores', async () => {
+    await request(app.getHttpServer()).get(`${catalog}/latest?page=2`).expect(200).expect('X-Cache', 'MISS');
+    await request(app.getHttpServer()).get(`${catalog}/latest?page=2`).expect(200).expect('X-Cache', 'HIT-L1');
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    fetchFn.mockClear();
+    await request(app.getHttpServer()).get(`${catalog}/latest?page=99999`).expect(404);
+    await request(app.getHttpServer()).get(`${catalog}/latest?page=99999`).expect(404);
+    expect(fetchFn).toHaveBeenCalledTimes(2);
   });
 
   it('expone el manifiesto de Apoll Comics', async () => {

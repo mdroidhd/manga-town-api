@@ -18,6 +18,13 @@ export const envSchema = z.object({
     .default('true')
     .transform((value) => value !== 'false'),
   REDIS_URL: z.string().url().optional(),
+  CACHE_PREFIX: z.string().default('mangatown:'),
+  CACHE_TTL_SEARCH: z.coerce.number().int().positive().default(600),
+  CACHE_TTL_LATEST: z.coerce.number().int().positive().default(120),
+  CACHE_TTL_SERIES: z.coerce.number().int().positive().default(3600),
+  CACHE_TTL_CHAPTERS: z.coerce.number().int().positive().default(1800),
+  CACHE_EPOCH_CHECK_MS: z.coerce.number().int().positive().default(5000),
+  CACHE_PURGE_TOKEN: z.string().optional(),
   DATABASE_URL: z.string().url().optional(),
 });
 

@@ -4,15 +4,15 @@ import {
   Get,
   HttpException,
   HttpStatus,
-  NotFoundException,
   Param,
   Query,
+  Res,
 } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 
 import type { OperationResult } from '../../domain/provider';
-import type { Provider } from '../../domain/provider.contract';
-import { ProviderRegistry } from '../providers/provider.registry';
+import type { Response } from 'express';
+import { CatalogService } from './catalog.service';
 
 /** Traduce el resultado de una operación a HTTP sin filtrar detalles internos. */
 function unwrap<T>(result: OperationResult<T>): T {
@@ -42,23 +42,12 @@ function unwrap<T>(result: OperationResult<T>): T {
 @ApiTags('catalog')
 @Controller('catalog')
 export class CatalogController {
-  constructor(private readonly registry: ProviderRegistry) {}
-
-  private provider(id: string): Provider {
-    const found = this.registry.get(id);
-    if (!found) {
-      throw new NotFoundException({
-        code: 'PROVIDER_NOT_FOUND',
-        message: `No existe el provider '${id}'`,
-      });
-    }
-    return found;
-  }
+  constructor(private readonly catalog: CatalogService) {}
 
   @Get(':provider/latest')
   @ApiOperation({ summary: 'Lista las series actualizadas recientemente en una extensión' })
   @ApiQuery({ name: 'page', required: false, schema: { type: 'integer', minimum: 1, default: 1 } })
-  async latest(@Param('provider') providerId: string, @Query('page') query: unknown = '1') {
+  async latest(@Param('provider') providerId: string, @Query('page') query: unknown = '1', @Res({ passthrough: true }) response?: Response) {
     const page = typeof query === 'string' && /^\d+$/.test(query) ? Number(query) : NaN;
     if (!Number.isSafeInteger(page) || page < 1) {
       throw new BadRequestException({
@@ -66,7 +55,8 @@ export class CatalogController {
         message: 'El parámetro page debe ser un entero mayor o igual a 1',
       });
     }
-    const result = await this.provider(providerId).listLatest(page, { userId: 'anonymous' });
+    const { result, cache } = await this.catalog.latest(providerId, page);
+    response?.setHeader('X-Cache', cache);
     const { items, hasNextPage } = unwrap(result);
     return { data: items, page, hasNextPage };
   }
@@ -74,7 +64,7 @@ export class CatalogController {
   @Get(':provider/search')
   @ApiOperation({ summary: 'Busca series en una extensión' })
   @ApiQuery({ name: 'q', required: true })
-  async search(@Param('provider') providerId: string, @Query('q') query?: string) {
+  async search(@Param('provider') providerId: string, @Query('q') query?: string, @Res({ passthrough: true }) response?: Response) {
     const term = (query ?? '').trim();
     if (term.length < 2) {
       throw new BadRequestException({
@@ -82,21 +72,24 @@ export class CatalogController {
         message: 'El parámetro q necesita al menos 2 caracteres',
       });
     }
-    const result = await this.provider(providerId).search(term, { userId: 'anonymous' });
+    const { result, cache } = await this.catalog.search(providerId, term);
+    response?.setHeader('X-Cache', cache);
     return { data: unwrap(result) };
   }
 
   @Get(':provider/series/:id')
   @ApiOperation({ summary: 'Ficha de una serie' })
-  async series(@Param('provider') providerId: string, @Param('id') id: string) {
-    const result = await this.provider(providerId).getSeries(id, { userId: 'anonymous' });
+  async series(@Param('provider') providerId: string, @Param('id') id: string, @Res({ passthrough: true }) response?: Response) {
+    const { result, cache } = await this.catalog.series(providerId, id);
+    response?.setHeader('X-Cache', cache);
     return { data: unwrap(result) };
   }
 
   @Get(':provider/series/:id/chapters')
   @ApiOperation({ summary: 'Capítulos de una serie' })
-  async chapters(@Param('provider') providerId: string, @Param('id') id: string) {
-    const result = await this.provider(providerId).listChapters(id, { userId: 'anonymous' });
+  async chapters(@Param('provider') providerId: string, @Param('id') id: string, @Res({ passthrough: true }) response?: Response) {
+    const { result, cache } = await this.catalog.chapters(providerId, id);
+    response?.setHeader('X-Cache', cache);
     return { data: unwrap(result) };
   }
 
@@ -107,7 +100,7 @@ export class CatalogController {
     @Param('id') id: string,
     @Param('chapter') chapter: string,
   ) {
-    const result = await this.provider(providerId).getPages(id, chapter, { userId: 'anonymous' });
+    const result = await this.catalog.provider(providerId).getPages(id, chapter, { userId: 'anonymous' });
     return { data: unwrap(result) };
   }
 }

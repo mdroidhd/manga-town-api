@@ -1,5 +1,8 @@
+import { ConfigService } from '@nestjs/config';
 import { OlympusProvider } from '../providers/olympus/olympus.provider';
 import { ProviderRegistry } from '../providers/provider.registry';
+import { CacheService } from '../../infrastructure/cache/cache.service';
+import { CatalogService } from './catalog.service';
 import { CatalogController } from './catalog.controller';
 
 describe('CatalogController.latest', () => {
@@ -8,7 +11,7 @@ describe('CatalogController.latest', () => {
     const provider = new OlympusProvider();
     registry.register(provider);
     return {
-      controller: new CatalogController(registry),
+      controller: new CatalogController(new CatalogService(registry, new CacheService(new ConfigService()))),
       listLatest: jest.spyOn(provider, 'listLatest').mockResolvedValue({
         status: 'ok',
         data: { items: [], hasNextPage: false },

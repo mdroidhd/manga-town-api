@@ -13,7 +13,7 @@ import type { Provider, ProviderContext, SeriesDetail } from '../../../domain/pr
 import {
   ApollComicsClient,
   ApollComicsError,
-  IMAGE_ORIGIN,
+  IMAGE_ORIGINS,
   SITE_ORIGIN,
 } from './apollcomics.client';
 
@@ -24,7 +24,7 @@ const manifest: ProviderManifest = {
   contractVersion: 1,
   kinds: ['comic'],
   languages: ['es'],
-  origins: [SITE_ORIGIN, IMAGE_ORIGIN],
+  origins: [SITE_ORIGIN, ...IMAGE_ORIGINS],
   capabilities: {
     login: 'none',
     captcha: 'none',
@@ -78,13 +78,18 @@ function mangaLink(
   }
 }
 
+function isAllowedImageOrigin(url: URL): boolean {
+  return url.origin === SITE_ORIGIN || IMAGE_ORIGINS.some((origin) => origin === url.origin);
+}
+
 function imageUrl(
   dataSrc: string | undefined,
   src: string | undefined,
   base: URL,
 ): URL | undefined {
   const url = safeUrl(dataSrc?.trim() || src, base);
-  if (url && (url.origin === SITE_ORIGIN || url.origin === IMAGE_ORIGIN)) return url;
+  if (!url || !isAllowedImageOrigin(url)) return undefined;
+  return url;
 }
 
 function coverImageUrl(
@@ -115,7 +120,7 @@ function seriesSummaries(
     const summary: SeriesSummary = { id: link.series, providerId: manifest.id, title };
     const cover = anchor.closest(itemSelector).find('img').first();
     const coverUrl = coverImageUrl(cover.attr('data-src'), cover.attr('src'), url);
-    if (coverUrl?.origin === SITE_ORIGIN) summary.coverUrl = coverUrl.toString();
+    if (coverUrl) summary.coverUrl = coverUrl.toString();
     results.set(link.series, summary);
   });
   return [...results.values()];

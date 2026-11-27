@@ -62,7 +62,7 @@ describe('ApollComicsProvider', () => {
     'https://[',
     'https://user@apollcomics.es/wp-content/uploads/serie.jpg',
     'http://apollcomics.es/wp-content/uploads/serie.jpg',
-    'https://cdn1.apollcomics.com/serie.jpg',
+    'https://cdn1.apollcomics.net/serie.jpg',
     '/wp-content/themes/madara/images/dflazy.jpg',
   ])('conserva la serie de novedades cuando la portada %s no es válida', async (source) => {
     fetchFn.mockResolvedValueOnce(
@@ -76,6 +76,33 @@ describe('ApollComicsProvider', () => {
       status: 'ok',
       data: {
         items: [{ id: 'serie', providerId: 'apollcomics', title: 'Serie' }],
+        hasNextPage: false,
+      },
+    });
+  });
+
+  it.each([
+    'https://cdn1.apollcomics.es/serie.jpg',
+    'https://cdn1.apollcomics.com/serie.jpg',
+  ])('acepta una portada del CDN permitido %s', async (source) => {
+    fetchFn.mockResolvedValueOnce(
+      new Response(`<div class="page-item-detail">
+        <img data-src="${source}" alt="">
+        <h3 class="post-title"><a href="/manga/serie/">Serie</a></h3>
+      </div>`),
+    );
+
+    await expect(provider.listLatest(1, ctx)).resolves.toEqual({
+      status: 'ok',
+      data: {
+        items: [
+          {
+            id: 'serie',
+            providerId: 'apollcomics',
+            title: 'Serie',
+            coverUrl: source,
+          },
+        ],
         hasNextPage: false,
       },
     });
@@ -155,8 +182,8 @@ describe('ApollComicsProvider', () => {
 
   it.each([
     'https://externo.invalid/pagina.jpg',
-    'https://usuario@cdn1.apollcomics.com/pagina.jpg',
-    'http://cdn1.apollcomics.com/pagina.jpg',
+    'https://usuario@cdn1.apollcomics.es/pagina.jpg',
+    'http://cdn1.apollcomics.es/pagina.jpg',
     '',
   ])('rechaza el lector con una fuente de imagen inválida %j', async (source) => {
     fetchFn.mockResolvedValueOnce(
@@ -169,6 +196,25 @@ describe('ApollComicsProvider', () => {
     await expect(provider.getPages('serie', 'capitulo-1', ctx)).resolves.toMatchObject({
       status: 'error',
       error: { code: 'UPSTREAM_INVALID_RESPONSE' },
+    });
+  });
+
+  it('extrae páginas de los dos CDNs conocidos en su orden original', async () => {
+    fetchFn.mockResolvedValueOnce(
+      new Response(`
+      <div class="reading-content"><div class="page-break">
+        <img data-src=" https://cdn1.apollcomics.es/uno.jpg " alt="">
+        <img src="https://cdn1.apollcomics.com/dos.jpg" alt="">
+      </div></div>
+    `),
+    );
+
+    await expect(provider.getPages('serie', 'capitulo-1', ctx)).resolves.toEqual({
+      status: 'ok',
+      data: [
+        { index: 0, url: 'https://cdn1.apollcomics.es/uno.jpg' },
+        { index: 1, url: 'https://cdn1.apollcomics.com/dos.jpg' },
+      ],
     });
   });
 });

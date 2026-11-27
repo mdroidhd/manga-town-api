@@ -1,6 +1,9 @@
 export const APOLLCOMICS_FETCH = Symbol('APOLLCOMICS_FETCH');
 export const SITE_ORIGIN = 'https://apollcomics.es';
-export const IMAGE_ORIGIN = 'https://cdn1.apollcomics.com';
+export const IMAGE_ORIGINS = [
+  'https://cdn1.apollcomics.es',
+  'https://cdn1.apollcomics.com',
+] as const;
 
 const REQUEST_TIMEOUT_MS = 5_000;
 

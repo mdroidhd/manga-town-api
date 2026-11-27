@@ -107,7 +107,7 @@ describe('Apoll Comics (e2e sin red externa)', () => {
       contractVersion: 1,
       kinds: ['comic'],
       languages: ['es'],
-      origins: [origin, 'https://cdn1.apollcomics.com'],
+      origins: [origin, 'https://cdn1.apollcomics.es', 'https://cdn1.apollcomics.com'],
       capabilities: { login: 'none', captcha: 'none', pages: 'server', deviceEgress: false },
     });
     expect(fetchFn).not.toHaveBeenCalled();

@@ -97,6 +97,6 @@ La infraestructura de caché está implementada; los módulos `sessions`, `conti
 
 El catálogo usa L1 en memoria (máximo 30 segundos) y Redis opcional compartido. Para activarlo en Coolify, configura `REDIS_URL` con la URL interna de Redis, por ejemplo `redis://redis:6379`, y redespliega la API. Sin Redis o ante un fallo, funciona en modo degradado con L1; `/v1/health` no depende de Redis. `CACHE_PREFIX` permite separar instalaciones (por defecto `mangatown:`).
 
-Los TTL en segundos son configurables con `CACHE_TTL_SEARCH` (600), `CACHE_TTL_LATEST` (120), `CACHE_TTL_SERIES` (3600) y `CACHE_TTL_CHAPTERS` (1800). El TTL de novedades es deliberadamente corto. `X-Cache` indica `MISS`, `HIT-L1` o `HIT-L2`; solo se almacenan resultados exitosos.
+Los TTL en segundos son configurables con `CACHE_TTL_SEARCH` (600), `CACHE_TTL_LATEST` (120), `CACHE_TTL_SERIES` (3600) y `CACHE_TTL_CHAPTERS` (1800). El TTL de novedades es deliberadamente corto. La invalidación entre instancias comprueba una epoch en Redis como máximo cada `CACHE_EPOCH_CHECK_MS` milisegundos (por defecto 5000); durante ese intervalo otra instancia puede conservar su L1. `X-Cache` indica `MISS`, `HIT-L1` o `HIT-L2`; solo se almacenan resultados exitosos.
 
 Para habilitar la purga interna, configura un valor secreto en `CACHE_PURGE_TOKEN`. Envía `POST /v1/cache/purge` con cabecera `x-cache-token` y cuerpo `{ "provider": "olympus" }` o `{ "all": true }`. Sin token configurado, la ruta devuelve 404. Protege este token como cualquier secreto de despliegue.

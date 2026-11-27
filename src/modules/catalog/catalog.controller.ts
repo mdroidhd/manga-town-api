@@ -34,7 +34,9 @@ function unwrap<T>(result: OperationResult<T>): T {
     );
   }
   const status =
-    result.error.code === 'NOT_FOUND'
+    result.error.code === 'READER_NOT_AVAILABLE'
+      ? HttpStatus.NOT_IMPLEMENTED
+      : result.error.code === 'NOT_FOUND'
       ? HttpStatus.NOT_FOUND
       : result.error.code === 'LOGIN_REQUIRED'
         ? HttpStatus.UNAUTHORIZED
@@ -105,8 +107,7 @@ export class CatalogController {
     @Res({ passthrough: true }) response?: Response,
   ) {
     const provider = this.catalog.provider(providerId);
-    if (provider.manifest.capabilities.pages === 'app') {
-      if (!provider.getPageFetchAction) throw new HttpException({ code: 'ACTION_NOT_SUPPORTED', message: 'Acción no disponible' }, 500);
+    if (provider.manifest.capabilities.pages === 'app' && provider.getPageFetchAction) {
       response?.status(HttpStatus.ACCEPTED);
       return { status: 'client_action_required', action: provider.getPageFetchAction(id, chapter) };
     }

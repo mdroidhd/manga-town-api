@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { AEDEX_FETCH, AedexClient } from './aedex/aedex.client';
+import { AedexProvider } from './aedex/aedex.provider';
 
 import { APOLLCOMICS_FETCH, ApollComicsClient } from './apollcomics/apollcomics.client';
 import { ApollComicsProvider } from './apollcomics/apollcomics.provider';
@@ -10,6 +12,9 @@ import { ProvidersController } from './providers.controller';
 @Module({
   controllers: [ProvidersController],
   providers: [
+    { provide: AEDEX_FETCH, useFactory: () => globalThis.fetch },
+    { provide: AedexClient, useFactory: (fetchFn: typeof fetch) => new AedexClient(fetchFn), inject: [AEDEX_FETCH] },
+    { provide: AedexProvider, useFactory: (client: AedexClient) => new AedexProvider(client), inject: [AedexClient] },
     { provide: OLYMPUS_FETCH, useFactory: () => globalThis.fetch },
     {
       provide: OlympusClient,
@@ -34,13 +39,14 @@ import { ProvidersController } from './providers.controller';
     },
     {
       provide: ProviderRegistry,
-      useFactory: (olympus: OlympusProvider, apollComics: ApollComicsProvider) => {
+      useFactory: (olympus: OlympusProvider, apollComics: ApollComicsProvider, aedex: AedexProvider) => {
         const registry = new ProviderRegistry();
         registry.register(olympus);
         registry.register(apollComics);
+        registry.register(aedex);
         return registry;
       },
-      inject: [OlympusProvider, ApollComicsProvider],
+      inject: [OlympusProvider, ApollComicsProvider, AedexProvider],
     },
   ],
   exports: [ProviderRegistry],

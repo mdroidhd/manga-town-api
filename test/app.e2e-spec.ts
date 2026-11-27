@@ -38,9 +38,14 @@ describe('API (e2e)', () => {
     expect(res.body.status).toBe('ok');
   });
 
-  it('GET /v1/providers lista únicamente Apoll Comics y Olympus', async () => {
+  it('GET /v1/providers lista Aedex, Apoll Comics y Olympus', async () => {
     const res = await request(app.getHttpServer()).get('/v1/providers').expect(200);
-    expect(res.body.data.map((p: { id: string }) => p.id)).toEqual(['apollcomics', 'olympus']);
+    expect(res.body.data.map((p: { id: string }) => p.id)).toEqual(['aedex', 'apollcomics', 'olympus']);
+  });
+
+  it('devuelve 501 para el lector Aedex pendiente', async () => {
+    const res = await request(app.getHttpServer()).get('/v1/catalog/aedex/series/serie/chapters/1/pages').expect(501);
+    expect(res.body.error.code).toBe('READER_NOT_AVAILABLE');
   });
 
   it('GET /v1/providers/:id devuelve 404 con código para un provider desconocido', async () => {

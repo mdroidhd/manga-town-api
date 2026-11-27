@@ -25,11 +25,38 @@ npm run start:dev
 - Swagger: `http://localhost:3000/docs`
 - Salud: `http://localhost:3000/v1/health`
 
-Servicios opcionales para las siguientes fases:
+## Docker Compose en local
+
+Para levantar la API junto a PostgreSQL y Redis (requiere Docker Compose 2.24.0 o posterior):
 
 ```bash
-docker compose up -d
+docker compose up --build -d
+curl http://localhost:3000/v1/health
 ```
+
+El archivo `.env` es opcional. Si existe, Compose pasa sus variables a la aplicación; puedes crearlo con `cp .env.example .env` y editarlo. El ejemplo usa `NODE_ENV=development` y habilita Swagger; sin `.env`, la imagen usa `NODE_ENV=production`. PostgreSQL y Redis se arrancan y se comprueba su salud antes de iniciar la API, pero la API todavía no los utiliza. Para detener los servicios: `docker compose down`.
+
+La aplicación, el mapeo y los healthchecks de Dockerfile y Compose usan el puerto 3000 y el prefijo `v1`. Si cambias `PORT`, ajusta el puerto publicado y ambos healthchecks; si cambias `API_PREFIX`, ajusta la ruta de ambos healthchecks. Dentro de Compose, las futuras URLs de PostgreSQL y Redis deberán usar los nombres de servicio `postgres` y `redis`, no `localhost`.
+
+## Despliegue en Coolify
+
+1. Crea un recurso **Application** desde el repositorio y elige **Dockerfile** como Build Pack.
+2. Configura **Ports Exposes** en **3000**. En **Healthcheck**, selecciona **HTTP**, método **GET**, esquema **http**, host **localhost**, puerto **3000** y ruta **`/v1/health`**; guarda los cambios y habilita el healthcheck. Esta configuración sustituye al `HEALTHCHECK` incluido en el Dockerfile. Si prefieres el de la imagen, deja el healthcheck del panel deshabilitado.
+3. Añade estas variables de entorno en Coolify:
+
+   ```text
+   NODE_ENV=production
+   PORT=3000
+   API_PREFIX=v1
+   CORS_ORIGINS=https://tu-cliente.example
+   SWAGGER_ENABLED=false
+   ```
+
+   Sustituye `CORS_ORIGINS` por los orígenes permitidos, separados por comas si hay varios.
+
+4. Despliega la aplicación. Comprueba que `/v1/health` responde a través de la URL configurada.
+
+Si cambias `PORT`, actualiza el puerto de Coolify y el healthcheck del Dockerfile; si cambias `API_PREFIX`, actualiza también las rutas de salud del Dockerfile y de Coolify. PostgreSQL y Redis aún no son necesarios para la API. Cuando se usen, añádelos como recursos separados en Coolify y configura las URLs de conexión correspondientes.
 
 ## Contrato de provider
 
